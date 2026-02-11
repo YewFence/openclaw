@@ -277,6 +277,21 @@ async function installPluginFromPackageDir(params: {
   const deps = manifest.dependencies ?? {};
   const hasDeps = Object.keys(deps).length > 0;
   if (hasDeps) {
+    // Strip devDependencies before running npm install to avoid
+    // "EUNSUPPORTEDPROTOCOL" errors from workspace:* references
+    // that were not resolved during publish.
+    const targetManifestPath = path.join(targetDir, "package.json");
+    try {
+      const raw = await fs.readFile(targetManifestPath, "utf8");
+      const pkg = JSON.parse(raw);
+      if (pkg.devDependencies) {
+        delete pkg.devDependencies;
+        await fs.writeFile(targetManifestPath, JSON.stringify(pkg, null, 2) + "\n");
+      }
+    } catch {
+      // best-effort; proceed with install even if stripping fails
+    }
+
     logger.info?.("Installing plugin dependencies…");
     const npmRes = await runCommandWithTimeout(
       ["npm", "install", "--omit=dev", "--silent", "--ignore-scripts"],
